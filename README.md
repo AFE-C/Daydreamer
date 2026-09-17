@@ -132,6 +132,12 @@ https://afe-c.github.io/Daydreamer/
 
 Netlify 使用根路径 `/`，GitHub Actions 使用 `/Daydreamer/`，两者的 PWA 路径会根据发布环境自动切换。
 
+当前 Netlify 项目已连接到本仓库：
+
+- 推送到 `main` 会自动发布生产版本
+- 创建或更新 Pull Request 会生成 Deploy Preview
+- GitHub Pages 仍由 `.github/workflows/deploy-pages.yml` 独立发布，作为备用访问入口
+
 ## 技术栈
 
 - React 18
