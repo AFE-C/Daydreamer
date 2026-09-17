@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
+import { NetworkStatus } from './NetworkStatus'
+import { PwaUpdatePrompt } from './PwaUpdatePrompt'
 import { SettingsIcon, SparklesIcon } from './icons'
 
 type AppShellProps = {
@@ -12,6 +14,8 @@ export function AppShell({ children, onOpenData }: AppShellProps) {
     <div className="app-shell">
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
+      <NetworkStatus />
+      <PwaUpdatePrompt />
       <header className="topbar page-width">
         <NavLink to="/" className="brand" aria-label="回到 Daydreamer 首页">
           <span className="brand-mark" aria-hidden="true"><span className="brand-glass" /><span className="brand-glint" /></span>

@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { DATA_CHANGED_EVENT } from '../app/events'
+import { usePwaInstall } from '../hooks/usePwa'
 import { exportBackup, importBackup } from '../services/backup'
-import { DownloadIcon, UploadIcon } from './icons'
+import { DownloadIcon, SparklesIcon, UploadIcon } from './icons'
 
 type DataModalProps = {
   onClose: () => void
@@ -9,7 +10,19 @@ type DataModalProps = {
 
 export function DataModal({ onClose }: DataModalProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const { canInstall, isInstalled, isIos, promptInstall } = usePwaInstall()
+  const [installing, setInstalling] = useState(false)
   const [status, setStatus] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+
+  async function handleInstall() {
+    setInstalling(true)
+    const accepted = await promptInstall()
+    setInstalling(false)
+
+    if (!accepted) {
+      setStatus({ kind: 'success', text: '可以随时从浏览器菜单安装 Daydreamer。' })
+    }
+  }
 
   async function handleExport() {
     try {
@@ -48,9 +61,24 @@ export function DataModal({ onClose }: DataModalProps) {
           </div>
           <button type="button" className="icon-button" onClick={onClose} aria-label="关闭备份与恢复">×</button>
         </div>
-        <p className="modal-description">记录保存在当前浏览器。导出一份 JSON 备份，方便你以后恢复，也方便自己保管。</p>
-        <div className="data-actions">
-          <button type="button" className="data-action" onClick={handleExport}>
+          <p className="modal-description">记录保存在当前浏览器。导出一份 JSON 备份，方便你以后恢复，也方便自己保管。</p>
+          <div className="data-actions">
+            {!isInstalled && canInstall && (
+              <button type="button" className="data-action" onClick={() => void handleInstall()} disabled={installing}>
+                <span className="data-action-icon mint-icon"><SparklesIcon /></span>
+                <span><strong>{installing ? '正在准备安装…' : '安装 Daydreamer'}</strong><small>放到手机或桌面，断网也能打开</small></span>
+              </button>
+            )}
+            {!isInstalled && !canInstall && (
+              <div className="data-action data-action-static">
+                <span className="data-action-icon mint-icon"><SparklesIcon /></span>
+                <span>
+                  <strong>{isIos ? '添加到主屏幕' : '从浏览器安装'}</strong>
+                  <small>{isIos ? '在 Safari 中点“分享”，再选择“添加到主屏幕”' : '打开浏览器菜单，选择“安装 Daydreamer”或“添加到主屏幕”'}</small>
+                </span>
+              </div>
+            )}
+            <button type="button" className="data-action" onClick={handleExport}>
             <span className="data-action-icon blue-icon"><DownloadIcon /></span>
             <span><strong>导出全部记录</strong><small>保存正文、标签和心情</small></span>
           </button>

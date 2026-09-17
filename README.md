@@ -17,6 +17,7 @@ Daydreamer 是一个本地优先的个人灵感与日记记录工具。
 - 导出 JSON 备份
 - 导入 JSON 备份，并与现有记录安全合并
 - 响应式布局，支持桌面和移动端浏览器
+- 可安装为手机或桌面 PWA，首次在线打开后支持离线记录
 - 支持系统的“减少动态效果”设置
 
 ## 产品特点
@@ -30,6 +31,13 @@ Daydreamer 是一个本地优先的个人灵感与日记记录工具。
 - 数据默认只在当前设备和当前浏览器配置中可见
 - 清理浏览器站点数据可能会删除记录
 - 更换设备或浏览器前，应先从“备份与恢复”中导出 JSON 文件
+- 首次在线打开后，应用外壳会缓存到本机；断网时仍可创建、编辑、搜索和导出记录
+
+### 安装与离线使用
+
+打开一次在线版本后，Daydreamer 会准备离线所需的应用资源。你可以在“备份与恢复”中安装到桌面或手机主屏幕，之后像普通应用一样打开。
+
+在 iPhone 上，如果浏览器没有显示自动安装按钮，请在 Safari 中使用“分享 → 添加到主屏幕”。网络恢复后，应用会提示你手动刷新到新版本，不会强制打断正在编辑的内容。
 
 ### 安全导入
 
@@ -69,7 +77,19 @@ http://localhost:5173/
 | `npm run build` | 执行 TypeScript 检查并构建生产版本 |
 | `npm run preview` | 预览生产构建结果 |
 
-当前提交已通过 `npm run build`。测试基础设施已保留，测试用例会随着功能继续补充。
+`npm run build` 会额外生成 `dist/404.html`，用于 GitHub Pages 上的 BrowserRouter 深链接回退。测试基础设施已保留，测试用例会随着功能继续补充。
+
+## GitHub Pages 部署
+
+推送到 `main` 分支后，`.github/workflows/deploy-pages.yml` 会自动构建并发布到 GitHub Pages。
+
+第一次启用时，请在仓库的 `Settings → Pages` 中将发布来源设为 `GitHub Actions`。项目地址通常是：
+
+```text
+https://afe-c.github.io/Daydreamer/
+```
+
+应用已经针对这个仓库路径设置了生产环境 `base`，并保留了干净的 `/entry/:id` 路由。
 
 ## 技术栈
 
@@ -94,11 +114,14 @@ Daydreamer/
 │  ├─ components/                 # 通用界面组件
 │  ├─ db/                         # Dexie / IndexedDB 数据库
 │  ├─ features/entries/           # 时间线、记录卡片和编辑器
+│  ├─ hooks/                      # 在线状态和 PWA 安装能力
 │  ├─ services/                   # 记录和备份服务
 │  ├─ styles/                     # 全局视觉样式
 │  ├─ types/                      # 数据类型和常量
 │  ├─ App.tsx                     # 路由和应用入口
 │  └─ main.tsx                    # React 挂载入口
+├─ scripts/copy-spa-fallback.mjs  # 生成 GitHub Pages 深链接回退页
+├─ .github/workflows/             # GitHub Pages 自动部署
 ├─ index.html
 ├─ package.json
 ├─ tsconfig.json
@@ -144,11 +167,10 @@ Daydreamer 使用浅色液态玻璃作为界面语言，但没有直接依赖外
 
 后续可以按实际使用频率逐步加入：
 
-1. PWA 安装和离线缓存
-2. Markdown 导出
-3. 可选的加密备份
-4. 多设备同步
-5. 更细的时间线筛选和回顾视图
+1. Markdown 导出
+2. 可选的加密备份
+3. 多设备同步
+4. 更细的时间线筛选和回顾视图
 
 ## License
 
