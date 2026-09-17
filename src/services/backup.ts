@@ -1,9 +1,10 @@
 import { allEntries, updateEntry } from './entries'
 import { db } from '../db/daydreamerDb'
 import { ENTRY_COLORS, MOODS, type DaydreamerBackup, type Entry, type ImportResult } from '../types/entry'
+import { queueUpsert } from './syncQueue'
 
-export async function exportBackup(): Promise<DaydreamerBackup> {
-  const entries = await allEntries()
+export async function exportBackup(ownerId: string): Promise<DaydreamerBackup> {
+  const entries = await allEntries(ownerId)
   return {
     app: 'Daydreamer',
     version: 1,
@@ -46,20 +47,21 @@ export function parseBackup(input: unknown): DaydreamerBackup {
   }
 }
 
-export async function importBackup(input: unknown): Promise<ImportResult> {
+export async function importBackup(ownerId: string, input: unknown): Promise<ImportResult> {
   const backup = parseBackup(input)
   const result: ImportResult = { inserted: 0, updated: 0, skipped: 0 }
-  const existing = new Map((await db.entries.toArray()).map((entry) => [entry.id, entry]))
+  const existing = new Map((await db.entries.where('ownerId').equals(ownerId).toArray()).map((entry) => [entry.id, entry]))
 
   for (const incoming of backup.entries) {
     const current = existing.get(incoming.id)
     if (!current) {
-      await db.entries.add(incoming)
+      await db.entries.add({ ...incoming, ownerId })
+      await queueUpsert({ ...incoming, ownerId })
       result.inserted += 1
       continue
     }
     if (incoming.updatedAt > current.updatedAt) {
-      await updateEntry(incoming.id, incoming)
+      await updateEntry(ownerId, incoming.id, incoming)
       result.updated += 1
     } else {
       result.skipped += 1

@@ -5,8 +5,10 @@ import { PlusIcon, SearchIcon, SparklesIcon } from '../../components/icons'
 import { listEntries } from '../../services/entries'
 import type { Entry } from '../../types/entry'
 import { EntryCard } from './EntryCard'
+import { useAuth } from '../auth/AuthContext'
 
 export function TimelinePage() {
+  const { user } = useAuth()
   const [entries, setEntries] = useState<Entry[]>([])
   const [search, setSearch] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -15,9 +17,10 @@ export function TimelinePage() {
   const [error, setError] = useState('')
 
   async function loadEntries() {
+    if (!user) return
     try {
       setError('')
-      setEntries(await listEntries())
+      setEntries(await listEntries(user.id))
     } catch {
       setError('暂时无法读取记录，请刷新页面再试。')
     } finally {
@@ -30,7 +33,7 @@ export function TimelinePage() {
     const handler = () => void loadEntries()
     window.addEventListener(DATA_CHANGED_EVENT, handler)
     return () => window.removeEventListener(DATA_CHANGED_EVENT, handler)
-  }, [])
+  }, [user?.id])
 
   const tags = useMemo(() => [...new Set(entries.flatMap((entry) => entry.tags))].sort(), [entries])
   const visibleEntries = useMemo(() => {
@@ -52,9 +55,9 @@ export function TimelinePage() {
           <p>不必整理好再开始。一段片刻、一种心情，或一件还没想明白的事，都值得被记下来。</p>
           <Link to="/entry/new" className="button button-primary"><PlusIcon size={18} /> 写下此刻</Link>
         </div>
-        <div className="hero-art" aria-hidden="true">
+        <div className="hero-art" aria-label="写作提示">
           <div className="hero-note">
-            <div className="hero-note-top"><span className="signal-dot" /><span>此刻的记录</span><span className="note-index">草稿</span></div>
+            <div className="hero-note-top"><span className="signal-dot" /><span>写作提示</span><span className="note-index">随手记</span></div>
             <div className="hero-note-body"><span className="note-symbol">“</span><p>先记下来，<br /><em>再慢慢想明白。</em></p></div>
             <div className="hero-note-bottom"><span className="glass-pill">灵感</span><span className="note-line" /></div>
           </div>
@@ -89,13 +92,12 @@ export function TimelinePage() {
 
         {error && <div className="inline-error">{error}</div>}
         {loading ? <div className="loading-state">正在打开你的时间线…</div> : visibleEntries.length > 0 ? (
-          <div className="entry-grid">{visibleEntries.map((entry) => <EntryCard key={entry.id} entry={entry} />)}</div>
+          <div className="entry-grid">{visibleEntries.map((entry) => <EntryCard key={entry.id} entry={entry} ownerId={user!.id} />)}</div>
         ) : entries.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-orb" aria-hidden="true"><span className="empty-orb-glass" /></div>
-            <h3>还没有写下第一条。</h3>
-            <p>从眼前的一点想法开始，等它慢慢长成自己的样子。</p>
-            <Link to="/entry/new" className="button button-soft"><PlusIcon size={17} /> 写下第一条</Link>
+            <h3>A quiet place for your next thought.</h3>
+            <p>Start with one small idea and let it grow.</p>
+            <Link to="/entry/new" className="button button-soft"><PlusIcon size={17} /> Write your first note</Link>
           </div>
         ) : (
           <div className="empty-state compact-empty">

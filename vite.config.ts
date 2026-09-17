@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig(({ mode }) => ({
-  base: mode === 'production' ? '/Daydreamer/' : '/',
+  base: mode === 'production' && process.env.GITHUB_ACTIONS === 'true' ? '/Daydreamer/' : '/',
   plugins: [
     react(),
     VitePWA({
@@ -17,8 +17,8 @@ export default defineConfig(({ mode }) => ({
         theme_color: '#f7fbff',
         background_color: '#f7fbff',
         display: 'standalone',
-        start_url: '/Daydreamer/',
-        scope: '/Daydreamer/',
+        start_url: process.env.GITHUB_ACTIONS === 'true' ? '/Daydreamer/' : '/',
+        scope: process.env.GITHUB_ACTIONS === 'true' ? '/Daydreamer/' : '/',
         categories: ['productivity', 'lifestyle'],
         icons: [
           {
@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
-        navigateFallback: '/Daydreamer/index.html',
+        navigateFallback: process.env.GITHUB_ACTIONS === 'true' ? '/Daydreamer/index.html' : '/index.html',
         globPatterns: ['**/*.{js,css,html,svg,ico,png,webmanifest}'],
       },
       devOptions: {

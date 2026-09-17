@@ -3,12 +3,14 @@ import { DATA_CHANGED_EVENT } from '../app/events'
 import { usePwaInstall } from '../hooks/usePwa'
 import { exportBackup, importBackup } from '../services/backup'
 import { DownloadIcon, SparklesIcon, UploadIcon } from './icons'
+import { useAuth } from '../features/auth/AuthContext'
 
 type DataModalProps = {
   onClose: () => void
 }
 
 export function DataModal({ onClose }: DataModalProps) {
+  const { user, syncNow } = useAuth()
   const inputRef = useRef<HTMLInputElement>(null)
   const { canInstall, isInstalled, isIos, promptInstall } = usePwaInstall()
   const [installing, setInstalling] = useState(false)
@@ -36,7 +38,8 @@ export function DataModal({ onClose }: DataModalProps) {
 
   async function handleExport() {
     try {
-      const backup = await exportBackup()
+      if (!user) return
+      const backup = await exportBackup(user.id)
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
@@ -53,7 +56,8 @@ export function DataModal({ onClose }: DataModalProps) {
   async function handleImport(file: File) {
     try {
       const parsed = JSON.parse(await file.text())
-      const result = await importBackup(parsed)
+      if (!user) return
+      const result = await importBackup(user.id, parsed)
       window.dispatchEvent(new Event(DATA_CHANGED_EVENT))
       setStatus({ kind: 'success', text: `已导入 ${result.inserted + result.updated} 条记录，跳过 ${result.skipped} 条旧记录。` })
     } catch (error) {
@@ -96,6 +100,10 @@ export function DataModal({ onClose }: DataModalProps) {
             <span className="data-action-icon lavender-icon"><UploadIcon /></span>
             <span><strong>导入备份文件</strong><small>与当前记录安全合并</small></span>
           </button>
+          <div className="data-account-box">
+            <div><strong>{user?.email}</strong><small>登录后自动同步到你的其他设备</small></div>
+            <button type="button" className="text-action" onClick={() => void syncNow()}>立即同步</button>
+          </div>
         </div>
         {status && <p className={`modal-status ${status.kind}`}>{status.text}</p>}
         <input ref={inputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={(event) => {

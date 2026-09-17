@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DATA_CHANGED_EVENT } from '../../app/events'
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ShuffleIcon, SparklesIcon } from '../../components/icons'
+import { useReveal } from '../../hooks/useReveal'
 import { getEntryCreatedDateKey, getRandomEntry, getReviewDateBounds, isEntryOnThisDay, listEntries, toLocalDateKey } from '../../services/entries'
 import type { Entry } from '../../types/entry'
+import { useAuth } from '../auth/AuthContext'
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -64,6 +66,7 @@ function ReviewEntryLink({ entry, showYear = false }: { entry: Entry; showYear?:
 }
 
 export function ReviewPage() {
+  const { user } = useAuth()
   const now = useMemo(() => new Date(), [])
   const todayKey = toLocalDateKey(now)
   const currentMonth = useMemo(() => new Date(now.getFullYear(), now.getMonth(), 1), [now])
@@ -74,11 +77,14 @@ export function ReviewPage() {
   const [randomLoading, setRandomLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const featureReveal = useReveal<HTMLElement>()
+  const calendarReveal = useReveal<HTMLElement>()
 
   async function loadReview() {
     try {
       setError('')
-      const [nextEntries, nextRandom] = await Promise.all([listEntries(), getRandomEntry()])
+      if (!user) return
+      const [nextEntries, nextRandom] = await Promise.all([listEntries(user.id), getRandomEntry(user.id)])
       setEntries(nextEntries)
       setRandomEntry(nextRandom)
     } catch {
@@ -93,7 +99,7 @@ export function ReviewPage() {
     const handler = () => void loadReview()
     window.addEventListener(DATA_CHANGED_EVENT, handler)
     return () => window.removeEventListener(DATA_CHANGED_EVENT, handler)
-  }, [])
+  }, [user?.id])
 
   const bounds = useMemo(() => getReviewDateBounds(entries), [entries])
   const earliestMonth = useMemo(() => bounds ? dateAtMonthStart(bounds.earliestDateKey) : currentMonth, [bounds, currentMonth])
@@ -148,7 +154,7 @@ export function ReviewPage() {
     setRandomLoading(true)
     try {
       setError('')
-      setRandomEntry(await getRandomEntry(randomEntry?.id))
+      if (user) setRandomEntry(await getRandomEntry(user.id, randomEntry?.id))
     } catch {
       setError('随机灵感暂时无法更新，本地数据读取失败。请稍后再试。')
     } finally {
@@ -165,19 +171,18 @@ export function ReviewPage() {
       <section className="review-hero" aria-labelledby="review-title">
         <div className="review-hero-copy">
           <span className="eyebrow"><CalendarIcon size={15} /> 回顾</span>
-          <h1 id="review-title">再见一次，曾经的念头。</h1>
+          <h1 id="review-title">朝花夕拾</h1>
           <p>有些想法不需要马上完成。隔一段时间再看，它们会告诉你曾经在意什么。</p>
         </div>
         <div className="review-date-orb" aria-hidden="true">
           <span>{now.getDate()}</span>
           <small>{now.toLocaleDateString('zh-CN', { month: 'long' })}</small>
-          <i />
         </div>
       </section>
 
       {error && <div className="inline-error" role="alert">{error}</div>}
 
-      <section className="review-feature-grid" aria-label="回顾推荐">
+      <section ref={featureReveal.ref} className={`review-feature-grid scroll-reveal ${featureReveal.isVisible ? 'is-visible' : ''}`} aria-label="回顾推荐">
         <article className="review-card memory-card">
           <div className="review-card-header">
             <div>
@@ -221,7 +226,7 @@ export function ReviewPage() {
         </article>
       </section>
 
-      <section className="review-calendar-section" aria-labelledby="calendar-title">
+      <section ref={calendarReveal.ref} className={`review-calendar-section scroll-reveal ${calendarReveal.isVisible ? 'is-visible' : ''}`} aria-labelledby="calendar-title">
         <div className="section-heading review-section-heading">
           <div>
             <span className="eyebrow">按日期回看</span>

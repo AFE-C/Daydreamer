@@ -7,6 +7,7 @@ import { DATA_CHANGED_EVENT } from '../../app/events'
 import { ArrowLeftIcon, CheckIcon, HeartIcon, LinkIcon, TrashIcon } from '../../components/icons'
 import { createEntry, deleteEntry, extractText, getEntry, updateEntry } from '../../services/entries'
 import { DEFAULT_ENTRY_INPUT, ENTRY_COLORS, MOODS, type Entry, type EntryColor, type Mood } from '../../types/entry'
+import { useAuth } from '../auth/AuthContext'
 
 function formatFullDate(value: string) {
   return new Intl.DateTimeFormat('zh-CN', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(value))
@@ -36,6 +37,7 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 }
 
 export function EntryEditorPage() {
+  const { user } = useAuth()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [entry, setEntry] = useState<Entry | null>(null)
@@ -46,6 +48,7 @@ export function EntryEditorPage() {
   const [mood, setMood] = useState<Mood | undefined>()
   const [color, setColor] = useState<EntryColor>('blue')
   const [isFavorite, setIsFavorite] = useState(false)
+  const [favoritePulse, setFavoritePulse] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [editorVersion, setEditorVersion] = useState(0)
   const titleRef = useRef(title)
@@ -72,8 +75,9 @@ export function EntryEditorPage() {
       setLoaded(true)
       return () => { active = false }
     }
+    if (!user) return () => { active = false }
     setLoaded(false)
-    void getEntry(id).then((found) => {
+    void getEntry(user.id, id).then((found) => {
       if (!active) return
       if (!found) {
         navigate('/', { replace: true })
@@ -89,7 +93,7 @@ export function EntryEditorPage() {
       setLoaded(true)
     }).catch(() => navigate('/', { replace: true }))
     return () => { active = false }
-  }, [editor, id, navigate])
+  }, [editor, id, navigate, user?.id])
 
   useEffect(() => { titleRef.current = title }, [title])
   useEffect(() => { tagsRef.current = tags }, [tags])
@@ -117,10 +121,12 @@ export function EntryEditorPage() {
       }
       try {
         if (entry?.id) {
-          const saved = await updateEntry(entry.id, input)
+          if (!user) throw new Error('登录状态已失效')
+          const saved = await updateEntry(user.id, entry.id, input)
           setEntry(saved)
         } else {
-          const saved = await createEntry(input)
+          if (!user) throw new Error('登录状态已失效')
+          const saved = await createEntry(user.id, input)
           setEntry(saved)
           navigate(`/entry/${saved.id}`, { replace: true })
         }
@@ -131,7 +137,7 @@ export function EntryEditorPage() {
       }
     }, 600)
     return () => window.clearTimeout(timer)
-  }, [color, editor, editorVersion, entry?.id, isFavorite, loaded, mood, navigate, tags, title])
+  }, [color, editor, editorVersion, entry?.id, isFavorite, loaded, mood, navigate, tags, title, user?.id])
 
   function addTag() {
     const next = tagInput.trim().replace(/^#/, '')
@@ -139,10 +145,17 @@ export function EntryEditorPage() {
     setTagInput('')
   }
 
+  function toggleFavorite() {
+    setIsFavorite((value) => !value)
+    setFavoritePulse(true)
+    window.setTimeout(() => setFavoritePulse(false), 360)
+  }
+
   async function handleDelete() {
     if (!entry?.id) return
     if (!window.confirm('确定要删除这条记录吗？删除后无法从 Daydreamer 恢复。')) return
-    await deleteEntry(entry.id)
+    if (!user) return
+    await deleteEntry(user.id, entry.id)
     window.dispatchEvent(new Event(DATA_CHANGED_EVENT))
     navigate('/')
   }
@@ -161,7 +174,7 @@ export function EntryEditorPage() {
           {saveState === 'error' && <span className="save-error">保存失败，请导出备份或重试。</span>}
         </div>
         <div className="editor-actions">
-          <button type="button" className={`icon-button ${isFavorite ? 'is-favorite' : ''}`} onClick={() => setIsFavorite((value) => !value)} aria-label={isFavorite ? '取消收藏' : '收藏'}><HeartIcon filled={isFavorite} /></button>
+          <button type="button" className={`icon-button ${isFavorite ? 'is-favorite' : ''} ${favoritePulse ? 'favorite-pulse' : ''}`} onClick={toggleFavorite} aria-label={isFavorite ? '取消收藏' : '收藏'}><HeartIcon filled={isFavorite} /></button>
           {entry && <button type="button" className="icon-button danger-icon" onClick={() => void handleDelete()} aria-label="删除记录"><TrashIcon size={19} /></button>}
         </div>
       </div>
@@ -172,19 +185,21 @@ export function EntryEditorPage() {
           <input className="title-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="给这段想法起个名字（可不填）" aria-label="记录标题" autoFocus={!entry} />
           <div className="editor-surface">
             <EditorToolbar editor={editor} />
-            <EditorContent editor={editor} />
-            {!currentContentText && <span className="editor-placeholder" aria-hidden="true">从一句话开始。不必完整，也不必正确。</span>}
+            <div className="editor-content-wrap">
+              <EditorContent editor={editor} />
+              {!currentContentText && <span className="editor-placeholder" aria-hidden="true">从一句话开始。不必完整，也不必正确。</span>}
+            </div>
           </div>
         </section>
 
         <aside className="editor-sidebar">
-          <div className="sidebar-block">
+          <div className="sidebar-block sidebar-block-mood">
             <span className="sidebar-label">心情</span>
             <div className="mood-options">
               {MOODS.map((option) => <button type="button" key={option} className={`mood-option ${mood === option ? 'selected' : ''}`} onClick={() => setMood(mood === option ? undefined : option)}>{option}</button>)}
             </div>
           </div>
-          <div className="sidebar-block">
+          <div className="sidebar-block sidebar-block-tags">
             <span className="sidebar-label">标签</span>
             <div className="tag-editor">
               {tags.map((tag) => <button type="button" className="editable-tag" key={tag} onClick={() => setTags((current) => current.filter((item) => item !== tag))}>#{tag}<span>×</span></button>)}
@@ -192,7 +207,7 @@ export function EntryEditorPage() {
             </div>
             <small className="sidebar-hint">按 Enter 添加，点击标签移除</small>
           </div>
-          <div className="sidebar-block">
+          <div className="sidebar-block sidebar-block-colors">
             <span className="sidebar-label">卡片颜色</span>
             <div className="color-options">
               {ENTRY_COLORS.map((option) => <button type="button" key={option} className={`color-option color-${option} ${color === option ? 'selected' : ''}`} onClick={() => setColor(option)} aria-label={`使用${option}色卡片`} />)}

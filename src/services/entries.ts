@@ -1,5 +1,6 @@
 import { db } from '../db/daydreamerDb'
 import type { Entry, EntryFilters, EntryInput } from '../types/entry'
+import { queueDelete, queueUpsert } from './syncQueue'
 
 export type ReviewDateBounds = {
   earliestDateKey: string
@@ -56,22 +57,24 @@ export function extractText(content: unknown): string {
   return `${ownText} ${children}`.replace(/\s+/g, ' ').trim()
 }
 
-export async function createEntry(input: EntryInput): Promise<Entry> {
+export async function createEntry(ownerId: string, input: EntryInput): Promise<Entry> {
   const now = new Date().toISOString()
   const entry: Entry = {
     ...input,
+    ownerId,
     id: createId(),
     tags: normalizeTags(input.tags),
     createdAt: now,
     updatedAt: now,
   }
   await db.entries.add(entry)
+  await queueUpsert(entry)
   return entry
 }
 
-export async function updateEntry(id: string, patch: Partial<EntryInput>): Promise<Entry> {
+export async function updateEntry(ownerId: string, id: string, patch: Partial<EntryInput>): Promise<Entry> {
   const current = await db.entries.get(id)
-  if (!current) throw new Error('找不到这条记录')
+  if (!current || current.ownerId !== ownerId) throw new Error('找不到这条记录')
   const next: Entry = {
     ...current,
     ...patch,
@@ -79,15 +82,17 @@ export async function updateEntry(id: string, patch: Partial<EntryInput>): Promi
     updatedAt: new Date().toISOString(),
   }
   await db.entries.put(next)
+  await queueUpsert(next)
   return next
 }
 
-export async function getEntry(id: string) {
-  return db.entries.get(id)
+export async function getEntry(ownerId: string, id: string) {
+  const entry = await db.entries.get(id)
+  return entry?.ownerId === ownerId ? entry : undefined
 }
 
-export async function listEntries(filters: EntryFilters = {}) {
-  const all = await db.entries.toArray()
+export async function listEntries(ownerId: string, filters: EntryFilters = {}) {
+  const all = await db.entries.where('ownerId').equals(ownerId).toArray()
   const search = filters.search?.trim().toLocaleLowerCase()
   return all
     .filter((entry) => {
@@ -99,30 +104,33 @@ export async function listEntries(filters: EntryFilters = {}) {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
-export async function deleteEntry(id: string) {
+export async function deleteEntry(ownerId: string, id: string) {
+  const current = await getEntry(ownerId, id)
+  if (!current) throw new Error('找不到这条记录')
   await db.entries.delete(id)
+  await queueDelete(ownerId, id, new Date().toISOString())
 }
 
-export async function allEntries() {
-  return db.entries.toArray()
+export async function allEntries(ownerId: string) {
+  return db.entries.where('ownerId').equals(ownerId).toArray()
 }
 
-export async function listEntriesCreatedOn(dateKey: string) {
-  const entries = await allEntries()
+export async function listEntriesCreatedOn(ownerId: string, dateKey: string) {
+  const entries = await allEntries(ownerId)
   return entries
     .filter((entry) => getEntryCreatedDateKey(entry) === dateKey)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
-export async function listEntriesOnThisDay(referenceDate = new Date()) {
-  const entries = await allEntries()
+export async function listEntriesOnThisDay(ownerId: string, referenceDate = new Date()) {
+  const entries = await allEntries(ownerId)
   return entries
     .filter((entry) => isEntryOnThisDay(entry, referenceDate))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-export async function getRandomEntry(excludeId?: string) {
-  const entries = await allEntries()
+export async function getRandomEntry(ownerId: string, excludeId?: string) {
+  const entries = await allEntries(ownerId)
   const candidates = entries.filter((entry) => entry.id !== excludeId)
   if (candidates.length === 0) return entries[0]
   return candidates[Math.floor(Math.random() * candidates.length)]

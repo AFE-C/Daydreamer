@@ -8,6 +8,7 @@ export type EntryColor = (typeof ENTRY_COLORS)[number]
 
 export type Entry = {
   id: string
+  ownerId?: string
   title: string
   contentJson: JSONContent
   contentText: string

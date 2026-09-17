@@ -2,7 +2,7 @@
 
 Daydreamer 是一个本地优先的个人灵感与日记记录工具。
 
-它适合记录那些还没有整理成文章的内容：突然想到的点子、当天的心情、零散的观察，或者一句暂时说不清楚的话。
+它适合记录那些还没有整理成文章的内容：突然想到的点子、当天的心情、零散的观察，或者一句暂时说不清楚的话。现在支持邮箱账号登录，并在保留本地优先体验的同时，把同一账号的记录同步到已登录设备。
 
 > 把脑海里的微光，留在这里。
 
@@ -19,17 +19,21 @@ Daydreamer 是一个本地优先的个人灵感与日记记录工具。
 - 导入 JSON 备份，并与现有记录安全合并
 - 响应式布局，支持桌面和移动端浏览器
 - 可安装为手机或桌面 PWA，首次在线打开后支持离线记录
+- 邮箱注册、登录、邮箱验证和密码重置
+- 同一账号的多设备同步；离线编辑会在联网后自动上传
 - 支持系统的“减少动态效果”设置
 
 ## 产品特点
 
-### 本地优先
+### 本地优先与账号隔离
 
-记录保存在当前浏览器的 IndexedDB 中，不需要注册账号，也不会自动上传到服务器。
+记录首先写入当前浏览器的 IndexedDB。登录后，每条本地记录会带有当前 Supabase 用户 ID，只读取和同步这个账号的数据；不同账号在同一台设备上也不会互相看到记录。
 
 这意味着：
 
-- 数据默认只在当前设备和当前浏览器配置中可见
+- 未登录前产生的旧记录，会在第一次成功登录后合并到当前账号
+- 云端同步按记录的 `updatedAt` 采用较新版本
+- 网络不可用时仍可编辑；同步失败不会阻塞本地保存
 - 清理浏览器站点数据可能会删除记录
 - 更换设备或浏览器前，应先从“备份与恢复”中导出 JSON 文件
 - 首次在线打开后，应用外壳会缓存到本机；断网时仍可创建、编辑、搜索和导出记录
@@ -57,7 +61,23 @@ Daydreamer 是一个本地优先的个人灵感与日记记录工具。
 - 月份日历会标出有记录的日期，点击日期即可查看当天内容
 - 日历只允许浏览最早记录所在月份到当前月份，不会进入未来日期
 
-回顾中心只读取当前浏览器中的本地记录，不会上传内容。没有历史记录时，页面会引导你先写下第一条。
+回顾中心读取当前账号在本机缓存中的记录。没有历史记录时，页面会引导你先写下第一条。
+
+## Supabase 配置
+
+项目使用 Supabase Auth（邮箱/密码）和 PostgreSQL `entries` 表。浏览器端只使用 publishable key，不要把 service role key 写进前端环境变量。
+
+1. 在 Supabase 项目的 SQL Editor 中执行 [`supabase/migrations/001_entries.sql`](supabase/migrations/001_entries.sql)。
+2. 在本地创建 `.env.local`（该文件已被 `.gitignore` 忽略）：
+
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-key
+```
+
+3. 在 Supabase Authentication 设置中确认邮箱验证和站点 URL。开发环境需要加入 `http://localhost:5173`；部署后加入 Netlify 站点地址。
+
+账号删除函数位于 `supabase/functions/delete-account/index.ts`，需要使用 Supabase CLI 部署，并在函数环境中保留 `SUPABASE_SERVICE_ROLE_KEY`，不要提交到仓库。
 
 ## 快速开始
 
@@ -103,6 +123,15 @@ https://afe-c.github.io/Daydreamer/
 
 应用已经针对这个仓库路径设置了生产环境 `base`，并保留了干净的 `/entry/:id` 路由。
 
+### Netlify 部署
+
+项目根目录已经提供 `netlify.toml`：构建命令为 `npm run build`，发布目录为 `dist`，并为 React Router 配置了 SPA 回退。Netlify 环境变量中需要添加：
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Netlify 使用根路径 `/`，GitHub Actions 使用 `/Daydreamer/`，两者的 PWA 路径会根据发布环境自动切换。
+
 ## 技术栈
 
 - React 18
@@ -111,9 +140,10 @@ https://afe-c.github.io/Daydreamer/
 - React Router
 - TipTap
 - Dexie + IndexedDB
+- Supabase Auth + PostgreSQL（云端同步）
 - 原生 CSS Variables、CSS 渐变和玻璃材质效果
 
-项目不依赖后端服务、登录系统、远程字体、统计脚本或外部图片资源。
+项目不加载远程字体、统计脚本或外部图片资源。Supabase 仅用于身份验证和已登录用户的数据同步。
 
 ## 页面入口
 
@@ -134,15 +164,18 @@ Daydreamer/
 │  ├─ app/                        # 应用级事件和配置
 │  ├─ components/                 # 通用界面组件
 │  ├─ db/                         # Dexie / IndexedDB 数据库
+│  ├─ features/auth/              # 登录、注册和会话管理
 │  ├─ features/entries/           # 时间线、记录卡片和编辑器
 │  ├─ hooks/                      # 在线状态和 PWA 安装能力
-│  ├─ services/                   # 记录和备份服务
+│  ├─ services/                   # 记录、备份和同步服务
 │  ├─ styles/                     # 全局视觉样式
 │  ├─ types/                      # 数据类型和常量
 │  ├─ App.tsx                     # 路由和应用入口
 │  └─ main.tsx                    # React 挂载入口
 ├─ scripts/copy-spa-fallback.mjs  # 生成 GitHub Pages 深链接回退页
 ├─ .github/workflows/             # GitHub Pages 自动部署
+├─ supabase/                       # 数据库迁移和 Edge Function
+├─ netlify.toml                    # Netlify 构建与 SPA 回退
 ├─ index.html
 ├─ package.json
 ├─ tsconfig.json
@@ -162,7 +195,7 @@ Daydreamer/
 - 是否收藏
 - 创建时间和更新时间
 
-数据库名称为 `daydreamer-db`，当前数据库版本为 `1`。
+数据库名称为 `daydreamer-db`，当前本地数据库版本为 `2`。云端表为 `public.entries`，通过 RLS 按 `auth.uid() = user_id` 隔离账号。
 
 ## 设计方向
 
@@ -176,13 +209,12 @@ Daydreamer 使用浅色液态玻璃作为界面语言，但没有直接依赖外
 
 ## 当前边界
 
-当前版本面向个人本地使用，暂不包含：
+当前版本暂不包含：
 
-- 账号和多设备同步
-- 云端数据库
 - AI 摘要或自动标签
 - 图片附件和语音输入
 - Markdown 导出
+- 端到端加密云同步
 
 ## 后续计划
 
@@ -190,7 +222,7 @@ Daydreamer 使用浅色液态玻璃作为界面语言，但没有直接依赖外
 
 1. Markdown 导出
 2. 可选的加密备份
-3. 多设备同步
+3. 端到端加密备份
 4. 更细的时间线筛选和回顾方式
 
 ## License
