@@ -3,3 +3,6 @@ dist/
 .sites-runtime/
 *.local
 !.env.example
+
+# Local Netlify folder
+.netlify
