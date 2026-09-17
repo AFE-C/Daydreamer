@@ -15,6 +15,16 @@ export function DataModal({ onClose }: DataModalProps) {
   const [status, setStatus] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
 
   async function handleInstall() {
+    if (!canInstall) {
+      setStatus({
+        kind: 'success',
+        text: isIos
+          ? '请点 Safari 底部的“分享”，再选择“添加到主屏幕”。'
+          : '请打开浏览器菜单，选择“安装 Daydreamer”或“添加到主屏幕”。',
+      })
+      return
+    }
+
     setInstalling(true)
     const accepted = await promptInstall()
     setInstalling(false)
@@ -70,13 +80,13 @@ export function DataModal({ onClose }: DataModalProps) {
               </button>
             )}
             {!isInstalled && !canInstall && (
-              <div className="data-action data-action-static">
+              <button type="button" className="data-action" onClick={() => void handleInstall()}>
                 <span className="data-action-icon mint-icon"><SparklesIcon /></span>
                 <span>
                   <strong>{isIos ? '添加到主屏幕' : '从浏览器安装'}</strong>
-                  <small>{isIos ? '在 Safari 中点“分享”，再选择“添加到主屏幕”' : '打开浏览器菜单，选择“安装 Daydreamer”或“添加到主屏幕”'}</small>
+                  <small>{isIos ? '点击查看 Safari 安装步骤' : '点击查看浏览器安装入口'}</small>
                 </span>
-              </div>
+              </button>
             )}
             <button type="button" className="data-action" onClick={handleExport}>
             <span className="data-action-icon blue-icon"><DownloadIcon /></span>
