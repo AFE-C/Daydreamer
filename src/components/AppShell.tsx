@@ -26,6 +26,7 @@ export function AppShell({ children, onOpenData }: AppShellProps) {
         </NavLink>
         <nav className="main-nav" aria-label="主导航">
           <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>时间线</NavLink>
+          <NavLink to="/review" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>回顾</NavLink>
           <button type="button" className="nav-link nav-button" onClick={onOpenData}>
             <SettingsIcon size={16} /> 备份与恢复
           </button>

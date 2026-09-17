@@ -58,3 +58,19 @@ export function CheckIcon(props: IconProps) {
 export function LinkIcon(props: IconProps) {
   return <Icon {...props}><path d="M10 13.8 14 9.7" /><path d="m7.2 16.6-1.1 1.1a3.2 3.2 0 0 1-4.5-4.5l3.7-3.7a3.2 3.2 0 0 1 4.5 0" /><path d="m16.8 7.4 1.1-1.1a3.2 3.2 0 0 1 4.5 4.5l-3.7 3.7a3.2 3.2 0 0 1-4.5 0" /></Icon>
 }
+
+export function CalendarIcon(props: IconProps) {
+  return <Icon {...props}><rect x="4" y="5.5" width="16" height="15" rx="2" /><path d="M8 3.5v4M16 3.5v4M4 10h16" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01" /></Icon>
+}
+
+export function ShuffleIcon(props: IconProps) {
+  return <Icon {...props}><path d="M4 7h2.3c2.9 0 4.1 2.2 5.7 5s2.8 5 5.7 5H20" /><path d="m17 14 3 3-3 3" /><path d="M4 17h2.3c1.3 0 2.3-.5 3.1-1.4M14.8 8.4C15.8 7.5 16.7 7 17.7 7H20" /><path d="m17 4 3 3-3 3" /></Icon>
+}
+
+export function ChevronLeftIcon(props: IconProps) {
+  return <Icon {...props}><path d="m14.5 5-7 7 7 7" /></Icon>
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return <Icon {...props}><path d="m9.5 5 7 7-7 7" /></Icon>
+}
