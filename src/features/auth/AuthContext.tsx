@@ -65,8 +65,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return
     let cancelled = false
     void (async () => {
-      await claimLegacyEntries(user.id)
-      if (!cancelled) await syncUser(user.id)
+      try {
+        await claimLegacyEntries(user.id)
+        if (!cancelled) await syncUser(user.id)
+      } catch {
+        // Local IndexedDB failures should not become unhandled promise
+        // rejections or prevent the rest of the app from opening.
+      }
     })()
     const stopSync = createSyncController(user.id)
     return () => {

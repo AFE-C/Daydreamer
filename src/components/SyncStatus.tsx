@@ -19,8 +19,12 @@ export function SyncStatus() {
     if (!user) return
     let active = true
     const load = async () => {
-      const next = await db.syncMeta.get(user.id)
-      if (active && next) setMeta(next)
+      try {
+        const next = await db.syncMeta.get(user.id)
+        if (active && next) setMeta(next)
+      } catch {
+        // The editor remains usable even if the status cache is unavailable.
+      }
     }
     void load()
     const handler = () => void load()

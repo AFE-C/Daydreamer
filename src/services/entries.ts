@@ -75,12 +75,19 @@ export async function createEntry(ownerId: string, input: EntryInput): Promise<E
 export async function updateEntry(ownerId: string, id: string, patch: Partial<EntryInput>): Promise<Entry> {
   const current = await db.entries.get(id)
   if (!current || current.ownerId !== ownerId) throw new Error('找不到这条记录')
-  const next: Entry = {
-    ...current,
-    ...patch,
-    tags: patch.tags ? normalizeTags(patch.tags) : current.tags,
-    updatedAt: new Date().toISOString(),
-  }
+
+  // Only copy fields that belong to EntryInput. This is intentionally
+  // explicit: imported JSON or another runtime caller must never be able to
+  // change the record owner by smuggling an `ownerId` field into a patch.
+  const next: Entry = { ...current }
+  if (patch.title !== undefined) next.title = patch.title
+  if (patch.contentJson !== undefined) next.contentJson = patch.contentJson
+  if (patch.contentText !== undefined) next.contentText = patch.contentText
+  if (patch.tags !== undefined) next.tags = normalizeTags(patch.tags)
+  if (Object.prototype.hasOwnProperty.call(patch, 'mood')) next.mood = patch.mood
+  if (patch.color !== undefined) next.color = patch.color
+  if (patch.isFavorite !== undefined) next.isFavorite = patch.isFavorite
+  next.updatedAt = new Date().toISOString()
   await db.entries.put(next)
   await queueUpsert(next)
   return next

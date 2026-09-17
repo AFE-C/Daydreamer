@@ -2,6 +2,7 @@ import { DATA_CHANGED_EVENT, SYNC_STATUS_EVENT } from '../app/events'
 import { db, type SyncMeta, type SyncOperation } from '../db/daydreamerDb'
 import { supabase } from '../lib/supabase'
 import type { Entry } from '../types/entry'
+import { queueUpsert } from './syncQueue'
 
 type RemoteEntry = {
   id: string
@@ -52,9 +53,14 @@ function fromRemote(row: RemoteEntry): Entry {
 }
 
 async function setSyncMeta(ownerId: string, patch: Partial<SyncMeta>) {
-  const current = await db.syncMeta.get(ownerId)
-  await db.syncMeta.put({ ownerId, state: 'idle', ...current, ...patch })
-  window.dispatchEvent(new Event(SYNC_STATUS_EVENT))
+  try {
+    const current = await db.syncMeta.get(ownerId)
+    await db.syncMeta.put({ ownerId, state: 'idle', ...current, ...patch })
+    window.dispatchEvent(new Event(SYNC_STATUS_EVENT))
+  } catch {
+    // Sync metadata is only a status aid. If IndexedDB is unavailable, the
+    // record editor must remain usable and the failure must stay handled.
+  }
 }
 
 async function getRemoteEntries(ownerId: string) {
@@ -103,15 +109,7 @@ async function pullEntries(ownerId: string) {
         }
         await db.syncQueue.where('[ownerId+entryId]').equals([ownerId, remote.id]).delete()
       } else {
-        await db.syncQueue.add({
-          operationId: crypto.randomUUID(),
-          ownerId,
-          entryId: local.id,
-          kind: 'upsert',
-          entry: local,
-          updatedAt: local.updatedAt,
-          createdAt: new Date().toISOString(),
-        })
+        await queueUpsert(local)
       }
       continue
     }
@@ -121,15 +119,7 @@ async function pullEntries(ownerId: string) {
       await db.entries.put(remoteEntry)
       changed = true
     } else if (local.updatedAt > remote.updated_at) {
-      await db.syncQueue.add({
-        operationId: crypto.randomUUID(),
-        ownerId,
-        entryId: local.id,
-        kind: 'upsert',
-        entry: local,
-        updatedAt: local.updatedAt,
-        createdAt: new Date().toISOString(),
-      })
+      await queueUpsert(local)
     }
   }
 

@@ -155,9 +155,13 @@ export function EntryEditorPage() {
     if (!entry?.id) return
     if (!window.confirm('确定要删除这条记录吗？删除后无法从 Daydreamer 恢复。')) return
     if (!user) return
-    await deleteEntry(user.id, entry.id)
-    window.dispatchEvent(new Event(DATA_CHANGED_EVENT))
-    navigate('/')
+    try {
+      await deleteEntry(user.id, entry.id)
+      window.dispatchEvent(new Event(DATA_CHANGED_EVENT))
+      navigate('/')
+    } catch {
+      setSaveState('error')
+    }
   }
 
   const displayDate = entry?.updatedAt ?? new Date().toISOString()

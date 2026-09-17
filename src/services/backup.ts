@@ -3,13 +3,21 @@ import { db } from '../db/daydreamerDb'
 import { ENTRY_COLORS, MOODS, type DaydreamerBackup, type Entry, type ImportResult } from '../types/entry'
 import { queueUpsert } from './syncQueue'
 
+function withoutOwnerId(entry: Entry): Entry {
+  const { ownerId: _ownerId, ...portableEntry } = entry
+  return portableEntry
+}
+
 export async function exportBackup(ownerId: string): Promise<DaydreamerBackup> {
   const entries = await allEntries(ownerId)
   return {
     app: 'Daydreamer',
     version: 1,
     exportedAt: new Date().toISOString(),
-    entries: entries.sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    // Backups are portable data, not account records. Do not leak the
+    // Supabase user id and do not let an imported file carry ownership across
+    // accounts.
+    entries: entries.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(withoutOwnerId),
   }
 }
 
@@ -43,7 +51,7 @@ export function parseBackup(input: unknown): DaydreamerBackup {
     app: 'Daydreamer',
     version: 1,
     exportedAt: typeof backup.exportedAt === 'string' ? backup.exportedAt : new Date().toISOString(),
-    entries: backup.entries,
+    entries: backup.entries.map(withoutOwnerId),
   }
 }
 
@@ -61,7 +69,15 @@ export async function importBackup(ownerId: string, input: unknown): Promise<Imp
       continue
     }
     if (incoming.updatedAt > current.updatedAt) {
-      await updateEntry(ownerId, incoming.id, incoming)
+      await updateEntry(ownerId, incoming.id, {
+        title: incoming.title,
+        contentJson: incoming.contentJson,
+        contentText: incoming.contentText,
+        tags: incoming.tags,
+        mood: incoming.mood,
+        color: incoming.color,
+        isFavorite: incoming.isFavorite,
+      })
       result.updated += 1
     } else {
       result.skipped += 1

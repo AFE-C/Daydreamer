@@ -5,6 +5,18 @@ function createOperationId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+async function replacePendingOperation(operation: SyncOperation) {
+  const pending = await db.syncQueue
+    .where('[ownerId+entryId]')
+    .equals([operation.ownerId, operation.entryId])
+    .toArray()
+
+  if (pending.length > 0) {
+    await db.syncQueue.bulkDelete(pending.map((item) => item.operationId))
+  }
+  await db.syncQueue.add(operation)
+}
+
 export async function queueUpsert(entry: Entry) {
   if (!entry.ownerId) return
   const operation: SyncOperation = {
@@ -16,11 +28,11 @@ export async function queueUpsert(entry: Entry) {
     updatedAt: entry.updatedAt,
     createdAt: new Date().toISOString(),
   }
-  await db.syncQueue.add(operation)
+  await replacePendingOperation(operation)
 }
 
 export async function queueDelete(ownerId: string, entryId: string, updatedAt = new Date().toISOString()) {
-  await db.syncQueue.add({
+  await replacePendingOperation({
     operationId: createOperationId(),
     ownerId,
     entryId,
