@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { Session, User } from '@supabase/supabase-js'
 import { db } from '../../db/daydreamerDb'
 import { supabase, supabaseConfig } from '../../lib/supabase'
+import { clearNewEntryDraft } from '../../services/drafts'
 import { claimLegacyEntries } from '../../services/syncQueue'
 import { createSyncController, syncUser } from '../../services/sync'
 
@@ -135,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await db.entries.where('ownerId').equals(user.id).delete()
       await db.syncQueue.where('ownerId').equals(user.id).delete()
       await db.syncMeta.delete(user.id)
+      await clearNewEntryDraft(user.id)
       await supabase.auth.signOut()
     },
     async syncNow() {

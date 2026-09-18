@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -6,7 +6,8 @@ import LinkExtension from '@tiptap/extension-link'
 import { DATA_CHANGED_EVENT } from '../../app/events'
 import { ArrowLeftIcon, CheckIcon, HeartIcon, LinkIcon, TrashIcon } from '../../components/icons'
 import { createEntry, deleteEntry, extractText, getEntry, updateEntry } from '../../services/entries'
-import { DEFAULT_ENTRY_INPUT, ENTRY_COLORS, MOODS, type Entry, type EntryColor, type Mood } from '../../types/entry'
+import { clearNewEntryDraft, getNewEntryDraft, saveNewEntryDraft } from '../../services/drafts'
+import { DEFAULT_ENTRY_INPUT, ENTRY_COLORS, MOODS, type Entry, type EntryColor, type EntryInput, type Mood } from '../../types/entry'
 import { useAuth } from '../auth/AuthContext'
 
 function formatFullDate(value: string) {
@@ -41,7 +42,7 @@ export function EntryEditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [entry, setEntry] = useState<Entry | null>(null)
-  const [loaded, setLoaded] = useState(!id)
+  const [loaded, setLoaded] = useState(false)
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
@@ -50,6 +51,9 @@ export function EntryEditorPage() {
   const [isFavorite, setIsFavorite] = useState(false)
   const [favoritePulse, setFavoritePulse] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [draftRestored, setDraftRestored] = useState(false)
+  const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
   const [editorVersion, setEditorVersion] = useState(0)
   const titleRef = useRef(title)
   const tagsRef = useRef(tags)
@@ -71,12 +75,32 @@ export function EntryEditorPage() {
 
   useEffect(() => {
     let active = true
+    if (!user || !editor) return () => { active = false }
+    setLoaded(false)
+    setSaveState('idle')
+    setDraftSaveState('idle')
+    setSubmitState('idle')
+
     if (!id) {
-      setLoaded(true)
+      setEntry(null)
+      void getNewEntryDraft(user.id).then((draft) => {
+        if (!active) return
+        setTitle(draft?.title ?? '')
+        setTags(draft?.tags ?? [])
+        setMood(draft?.mood)
+        setColor(draft?.color ?? DEFAULT_ENTRY_INPUT.color)
+        setIsFavorite(draft?.isFavorite ?? false)
+        editor.commands.setContent(draft?.contentJson ?? DEFAULT_ENTRY_INPUT.contentJson)
+        setDraftRestored(Boolean(draft))
+        setLoaded(true)
+      }).catch(() => {
+        if (!active) return
+        setDraftRestored(false)
+        setLoaded(true)
+      })
       return () => { active = false }
     }
-    if (!user) return () => { active = false }
-    setLoaded(false)
+
     void getEntry(user.id, id).then((found) => {
       if (!active) return
       if (!found) {
@@ -89,7 +113,8 @@ export function EntryEditorPage() {
       setMood(found.mood)
       setColor(found.color)
       setIsFavorite(found.isFavorite)
-      editor?.commands.setContent(found.contentJson)
+      setDraftRestored(false)
+      editor.commands.setContent(found.contentJson)
       setLoaded(true)
     }).catch(() => navigate('/', { replace: true }))
     return () => { active = false }
@@ -103,33 +128,62 @@ export function EntryEditorPage() {
 
   const currentContentText = useMemo(() => editor?.getText().trim() ?? '', [editor, editorVersion])
 
+  const collectInput = useCallback((): EntryInput => {
+    const contentJson = editor?.getJSON() ?? DEFAULT_ENTRY_INPUT.contentJson
+    return {
+      title: title.trim(),
+      contentJson,
+      contentText: extractText(contentJson),
+      tags,
+      mood,
+      color,
+      isFavorite,
+    }
+  }, [color, editor, isFavorite, mood, tags, title])
+
+  const persistNewDraft = useCallback(async () => {
+    if (!user || entry?.id || !editor) return true
+    const input = collectInput()
+    const hasContent = Boolean(input.title || input.contentText || input.tags.length || input.mood)
+    setDraftSaveState('saving')
+    try {
+      if (hasContent) await saveNewEntryDraft(user.id, input)
+      else await clearNewEntryDraft(user.id)
+      setDraftSaveState(hasContent ? 'saved' : 'idle')
+      return true
+    } catch {
+      setDraftSaveState('error')
+      return false
+    }
+  }, [collectInput, editor, entry?.id, user])
+
   useEffect(() => {
-    if (!loaded || !editor) return
+    if (!loaded || !editor || !user || entry?.id || submitState === 'submitting' || submitState === 'success') return
+    const timer = window.setTimeout(() => void persistNewDraft(), 160)
+    return () => window.clearTimeout(timer)
+  }, [editor, entry?.id, loaded, persistNewDraft, submitState, user])
+
+  useEffect(() => {
+    if (!loaded || !editor || !entry?.id) return
     const contentText = editor.getText().trim()
     if (!titleRef.current.trim() && !contentText) return
 
     setSaveState('saving')
     const timer = window.setTimeout(async () => {
+      const contentJson = editor.getJSON()
       const input = {
         title: titleRef.current.trim(),
-        contentJson: editor.getJSON(),
-        contentText: extractText(editor.getJSON()),
+        contentJson,
+        contentText: extractText(contentJson),
         tags: tagsRef.current,
         mood: moodRef.current,
         color: colorRef.current,
         isFavorite: favoriteRef.current,
       }
       try {
-        if (entry?.id) {
-          if (!user) throw new Error('登录状态已失效')
-          const saved = await updateEntry(user.id, entry.id, input)
-          setEntry(saved)
-        } else {
-          if (!user) throw new Error('登录状态已失效')
-          const saved = await createEntry(user.id, input)
-          setEntry(saved)
-          navigate(`/entry/${saved.id}`, { replace: true })
-        }
+        if (!user) throw new Error('登录状态已失效')
+        const saved = await updateEntry(user.id, entry.id, input)
+        setEntry(saved)
         window.dispatchEvent(new Event(DATA_CHANGED_EVENT))
         setSaveState('saved')
       } catch {
@@ -137,7 +191,48 @@ export function EntryEditorPage() {
       }
     }, 600)
     return () => window.clearTimeout(timer)
-  }, [color, editor, editorVersion, entry?.id, isFavorite, loaded, mood, navigate, tags, title, user?.id])
+  }, [color, editor, editorVersion, entry?.id, isFavorite, loaded, mood, tags, title, user?.id])
+
+  async function handleSubmit() {
+    if (!user || !editor || entry?.id || submitState === 'submitting' || submitState === 'success') return
+    const input = collectInput()
+    if (!input.title && !input.contentText) return
+
+    setSubmitState('submitting')
+    const draftSaved = await persistNewDraft()
+    if (!draftSaved) {
+      setSubmitState('error')
+      return
+    }
+
+    try {
+      await createEntry(user.id, input)
+      await clearNewEntryDraft(user.id)
+      setDraftRestored(false)
+      setSubmitState('success')
+      window.dispatchEvent(new Event(DATA_CHANGED_EVENT))
+      window.setTimeout(() => navigate('/', { replace: true }), 800)
+    } catch {
+      setSubmitState('error')
+    }
+  }
+
+  async function handleDiscardDraft() {
+    if (!user || entry?.id) return
+    if (!window.confirm('丢弃这份草稿？未提交的内容会从本机删除。')) return
+    try {
+      await clearNewEntryDraft(user.id)
+      navigate('/', { replace: true })
+    } catch {
+      setDraftSaveState('error')
+    }
+  }
+
+  async function handleBack(event: MouseEvent<HTMLAnchorElement>) {
+    if (entry?.id) return
+    event.preventDefault()
+    if (await persistNewDraft()) navigate('/')
+  }
 
   function addTag() {
     const next = tagInput.trim().replace(/^#/, '')
@@ -168,16 +263,26 @@ export function EntryEditorPage() {
 
   if (!loaded) return <div className="loading-state editor-loading">正在打开这条记录…</div>
 
+  const canSubmit = Boolean(title.trim() || currentContentText)
+  const hasDraftValue = Boolean(title.trim() || currentContentText || tags.length || mood)
+
   return (
     <div className={`editor-page editor-${color}`}>
       <div className="editor-topbar">
-        <Link to="/" className="back-link"><ArrowLeftIcon size={18} /> 返回时间线</Link>
+        <Link to="/" className="back-link" onClick={(event) => void handleBack(event)}><ArrowLeftIcon size={18} /> 返回时间线</Link>
         <div className="editor-status" aria-live="polite">
-          {saveState === 'saving' && <><span className="save-dot saving-dot" />正在保存</>}
-          {saveState === 'saved' && <><CheckIcon size={15} />已保存</>}
-          {saveState === 'error' && <span className="save-error">保存失败，请导出备份或重试。</span>}
+          {entry?.id && saveState === 'saving' && <><span className="save-dot saving-dot" />正在保存</>}
+          {entry?.id && saveState === 'saved' && <><CheckIcon size={15} />已保存</>}
+          {entry?.id && saveState === 'error' && <span className="save-error">保存失败，内容仍在本机。请再试一次。</span>}
+          {!entry?.id && submitState === 'submitting' && <><span className="save-dot saving-dot" />正在提交</>}
+          {!entry?.id && submitState === 'success' && <><CheckIcon size={15} />记录已提交</>}
+          {!entry?.id && submitState === 'error' && <span className="save-error">提交失败，草稿仍在本机。请再试一次。</span>}
+          {!entry?.id && submitState === 'idle' && draftSaveState === 'saving' && <><span className="save-dot saving-dot" />正在保存草稿</>}
+          {!entry?.id && submitState === 'idle' && draftSaveState === 'saved' && <><CheckIcon size={15} />草稿已保存</>}
+          {!entry?.id && submitState === 'idle' && draftSaveState === 'error' && <span className="save-error">草稿保存失败，请暂时不要离开此页。</span>}
         </div>
         <div className="editor-actions">
+          {!entry?.id && <button type="button" className="button button-primary editor-submit" onClick={() => void handleSubmit()} disabled={!canSubmit || submitState === 'submitting' || submitState === 'success'}>{submitState === 'submitting' ? '正在提交…' : submitState === 'success' ? '已提交 ✓' : submitState === 'error' ? '重新提交' : '提交记录'}</button>}
           <button type="button" className={`icon-button ${isFavorite ? 'is-favorite' : ''} ${favoritePulse ? 'favorite-pulse' : ''}`} onClick={toggleFavorite} aria-label={isFavorite ? '取消收藏' : '收藏'}><HeartIcon filled={isFavorite} /></button>
           {entry && <button type="button" className="icon-button danger-icon" onClick={() => void handleDelete()} aria-label="删除记录"><TrashIcon size={19} /></button>}
         </div>
@@ -186,6 +291,7 @@ export function EntryEditorPage() {
       <div className="editor-layout">
         <section className="editor-main-column">
           <div className="editor-date">{entry ? formatFullDate(displayDate) : '今天 · 新记录'}</div>
+          {!entry && draftRestored && <div className="draft-recovered" role="status"><CheckIcon size={14} />已恢复草稿<span>内容仍保存在这台设备</span></div>}
           <input className="title-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="给这段想法起个名字（可不填）" aria-label="记录标题" autoFocus={!entry} />
           <div className="editor-surface">
             <EditorToolbar editor={editor} />
@@ -218,6 +324,7 @@ export function EntryEditorPage() {
             </div>
           </div>
           <div className="sidebar-note"><span>✦</span><p>先记下来，再慢慢想明白。</p></div>
+          {!entry && hasDraftValue && <button type="button" className="draft-discard" onClick={() => void handleDiscardDraft()}>丢弃草稿</button>}
         </aside>
       </div>
     </div>

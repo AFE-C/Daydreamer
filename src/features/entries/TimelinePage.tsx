@@ -48,20 +48,13 @@ export function TimelinePage() {
 
   return (
     <div className="timeline-page">
-      <section className="hero-panel">
-        <div className="hero-copy">
-          <span className="eyebrow"><SparklesIcon size={15} /> 从一句话开始</span>
-          <h1>把脑海里的微光，<br /><em>留在这里。</em></h1>
-          <p>不必整理好再开始。一段片刻、一种心情，或一件还没想明白的事，都值得被记下来。</p>
-          <Link to="/entry/new" className="button button-primary"><PlusIcon size={18} /> 写下此刻</Link>
+      <section className="timeline-intro">
+        <div className="timeline-intro-copy">
+          <span className="eyebrow"><SparklesIcon size={14} /> 随手记</span>
+          <h1>把想法留在这里。</h1>
+          <p>不用整理好，先写下来。</p>
         </div>
-        <div className="hero-art" aria-label="写作提示">
-          <div className="hero-note">
-            <div className="hero-note-top"><span className="signal-dot" /><span>写作提示</span><span className="note-index">随手记</span></div>
-            <div className="hero-note-body"><span className="note-symbol">“</span><p>先记下来，<br /><em>再慢慢想明白。</em></p></div>
-            <div className="hero-note-bottom"><span className="glass-pill">灵感</span><span className="note-line" /></div>
-          </div>
-        </div>
+        <Link to="/entry/new" className="button button-primary timeline-quick-action"><PlusIcon size={18} /> 快速记录</Link>
       </section>
 
       <section className="timeline-section" aria-labelledby="timeline-title">
