@@ -168,13 +168,13 @@ export function ReviewPage() {
 
   return (
     <div className="review-page">
-      <section className="review-hero" aria-labelledby="review-title">
+      <section className="review-hero review-heading-panel" aria-labelledby="review-title">
         <div className="review-hero-copy">
           <span className="eyebrow"><CalendarIcon size={15} /> 回顾</span>
           <h1 id="review-title">朝花夕拾</h1>
           <p>有些想法不需要马上完成。隔一段时间再看，它们会告诉你曾经在意什么。</p>
         </div>
-        <div className="review-date-orb" aria-hidden="true">
+        <div className="review-date-chip" aria-label={`今天是${todayLabel}`}>
           <span>{now.getDate()}</span>
           <small>{now.toLocaleDateString('zh-CN', { month: 'long' })}</small>
         </div>
@@ -182,7 +182,7 @@ export function ReviewPage() {
 
       {error && <div className="inline-error" role="alert">{error}</div>}
 
-      <section ref={featureReveal.ref} className={`review-feature-grid scroll-reveal ${featureReveal.isVisible ? 'is-visible' : ''}`} aria-label="回顾推荐">
+      <section ref={featureReveal.ref} className={`review-feature-grid review-feature-stack scroll-reveal ${featureReveal.isVisible ? 'is-visible' : ''}`} aria-label="回顾推荐">
         <article className="review-card memory-card">
           <div className="review-card-header">
             <div>

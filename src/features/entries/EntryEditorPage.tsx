@@ -54,6 +54,7 @@ export function EntryEditorPage() {
   const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [draftRestored, setDraftRestored] = useState(false)
   const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
+  const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [editorVersion, setEditorVersion] = useState(0)
   const titleRef = useRef(title)
   const tagsRef = useRef(tags)
@@ -80,6 +81,7 @@ export function EntryEditorPage() {
     setSaveState('idle')
     setDraftSaveState('idle')
     setSubmitState('idle')
+    setPropertiesOpen(false)
 
     if (!id) {
       setEntry(null)
@@ -265,6 +267,7 @@ export function EntryEditorPage() {
 
   const canSubmit = Boolean(title.trim() || currentContentText)
   const hasDraftValue = Boolean(title.trim() || currentContentText || tags.length || mood)
+  const propertySummary = [mood, tags.length ? `${tags.length} 个标签` : '', color === 'blue' ? '青蓝' : color === 'lavender' ? '淡紫' : color === 'mint' ? '薄荷' : '浅粉'].filter(Boolean).join(' · ')
 
   return (
     <div className={`editor-page editor-${color}`}>
@@ -293,6 +296,39 @@ export function EntryEditorPage() {
           <div className="editor-date">{entry ? formatFullDate(displayDate) : '今天 · 新记录'}</div>
           {!entry && draftRestored && <div className="draft-recovered" role="status"><CheckIcon size={14} />已恢复草稿<span>内容仍保存在这台设备</span></div>}
           <input className="title-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="给这段想法起个名字（可不填）" aria-label="记录标题" autoFocus={!entry} />
+          <div className={`editor-properties ${propertiesOpen ? 'is-open' : ''}`}>
+            <button type="button" className="editor-properties-toggle" aria-expanded={propertiesOpen} aria-controls="editor-properties-panel" onClick={() => setPropertiesOpen((open) => !open)}>
+              <span>记录属性</span>
+              <small>{propertySummary || '心情、标签与颜色'}</small>
+              <span className="properties-chevron" aria-hidden="true">⌄</span>
+            </button>
+            <div id="editor-properties-panel" className="editor-properties-panel" aria-hidden={!propertiesOpen}>
+              <div className="editor-sidebar">
+                <div className="sidebar-block sidebar-block-mood">
+                  <span className="sidebar-label">心情</span>
+                  <div className="mood-options">
+                    {MOODS.map((option) => <button type="button" key={option} className={`mood-option ${mood === option ? 'selected' : ''}`} onClick={() => setMood(mood === option ? undefined : option)}>{option}</button>)}
+                  </div>
+                </div>
+                <div className="sidebar-block sidebar-block-tags">
+                  <span className="sidebar-label">标签</span>
+                  <div className="tag-editor">
+                    {tags.map((tag) => <button type="button" className="editable-tag" key={tag} onClick={() => setTags((current) => current.filter((item) => item !== tag))}>#{tag}<span>×</span></button>)}
+                    <input value={tagInput} onChange={(event) => setTagInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addTag() } }} onBlur={addTag} placeholder={tags.length ? '添加标签' : '输入后回车'} aria-label="添加标签" />
+                  </div>
+                  <small className="sidebar-hint">按 Enter 添加，点击标签移除</small>
+                </div>
+                <div className="sidebar-block sidebar-block-colors">
+                  <span className="sidebar-label">卡片颜色</span>
+                  <div className="color-options">
+                    {ENTRY_COLORS.map((option) => <button type="button" key={option} className={`color-option color-${option} ${color === option ? 'selected' : ''}`} onClick={() => setColor(option)} aria-label={`使用${option}色卡片`} />)}
+                  </div>
+                </div>
+                <div className="sidebar-note"><span>✦</span><p>先记下来，再慢慢想明白。</p></div>
+                {!entry && hasDraftValue && <button type="button" className="draft-discard" onClick={() => void handleDiscardDraft()}>丢弃草稿</button>}
+              </div>
+            </div>
+          </div>
           <div className="editor-surface">
             <EditorToolbar editor={editor} />
             <div className="editor-content-wrap">
@@ -302,30 +338,6 @@ export function EntryEditorPage() {
           </div>
         </section>
 
-        <aside className="editor-sidebar">
-          <div className="sidebar-block sidebar-block-mood">
-            <span className="sidebar-label">心情</span>
-            <div className="mood-options">
-              {MOODS.map((option) => <button type="button" key={option} className={`mood-option ${mood === option ? 'selected' : ''}`} onClick={() => setMood(mood === option ? undefined : option)}>{option}</button>)}
-            </div>
-          </div>
-          <div className="sidebar-block sidebar-block-tags">
-            <span className="sidebar-label">标签</span>
-            <div className="tag-editor">
-              {tags.map((tag) => <button type="button" className="editable-tag" key={tag} onClick={() => setTags((current) => current.filter((item) => item !== tag))}>#{tag}<span>×</span></button>)}
-              <input value={tagInput} onChange={(event) => setTagInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addTag() } }} onBlur={addTag} placeholder={tags.length ? '添加标签' : '输入后回车'} aria-label="添加标签" />
-            </div>
-            <small className="sidebar-hint">按 Enter 添加，点击标签移除</small>
-          </div>
-          <div className="sidebar-block sidebar-block-colors">
-            <span className="sidebar-label">卡片颜色</span>
-            <div className="color-options">
-              {ENTRY_COLORS.map((option) => <button type="button" key={option} className={`color-option color-${option} ${color === option ? 'selected' : ''}`} onClick={() => setColor(option)} aria-label={`使用${option}色卡片`} />)}
-            </div>
-          </div>
-          <div className="sidebar-note"><span>✦</span><p>先记下来，再慢慢想明白。</p></div>
-          {!entry && hasDraftValue && <button type="button" className="draft-discard" onClick={() => void handleDiscardDraft()}>丢弃草稿</button>}
-        </aside>
       </div>
     </div>
   )

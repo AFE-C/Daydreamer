@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { CursorGlow } from './CursorGlow'
+import { AmbientBackground } from './AmbientBackground'
 import { NetworkStatus } from './NetworkStatus'
 import { PwaUpdatePrompt } from './PwaUpdatePrompt'
 import { SettingsIcon, SparklesIcon } from './icons'
@@ -86,15 +87,26 @@ export function AppShell({ children, onOpenData }: AppShellProps) {
 
   return (
     <div className="app-shell">
-      <div className="ambient ambient-one" />
-      <div className="ambient ambient-two" />
+      <AmbientBackground />
       <CursorGlow />
       <NetworkStatus />
       <PwaUpdatePrompt />
       <header className="topbar page-width">
         <div className="brand-menu-wrap" ref={menuRef}>
           <button type="button" className="brand" aria-label="打开 Daydreamer 菜单" aria-expanded={menuOpen} aria-controls="brand-menu" onClick={() => setMenuOpen((open) => !open)}>
-            <span className="brand-mark" aria-hidden="true"><span className="brand-orbit" /><span className="brand-orb" /><span className="brand-glint" /></span>
+            <span className="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 40 40" role="presentation">
+                <defs>
+                  <linearGradient id="daydreamer-drop" x1="8" y1="5" x2="31" y2="35" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#83e5ee" />
+                    <stop offset=".58" stopColor="#9eacf3" />
+                    <stop offset="1" stopColor="#edb8d9" />
+                  </linearGradient>
+                </defs>
+                <path d="M20 4.5C17.3 9.2 10 15.9 10 23.2a10 10 0 0 0 20 0C30 15.9 22.7 9.2 20 4.5Z" fill="url(#daydreamer-drop)" />
+                <path d="M15.2 19.5c1.2-2.8 3.1-5.1 4.9-7.4" fill="none" stroke="rgba(255,255,255,.86)" strokeLinecap="round" strokeWidth="2" />
+              </svg>
+            </span>
             <span className="brand-copy">
               <strong>Daydreamer</strong>
               <span>记录当下的微光</span>
